@@ -1,9 +1,12 @@
 package edu.ucu.yermilov.master
 
-import edu.ucu.yermilov.master.controller.AppController
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
+import edu.ucu.yermilov.master.controller.MasterController
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.{Bean, Configuration}
 
 object Master {
   def main(args: Array[String]): Unit = {
@@ -15,5 +18,16 @@ object Master {
 @SpringBootApplication
 class Master {
   @Bean
-  def appController = new AppController()
+  def masterController(objectMapper: ObjectMapper) = new MasterController(objectMapper)
+}
+
+@Configuration
+class JacksonConfiguration {
+
+  @Bean
+  def objectMapper: ObjectMapper = {
+    val objectMapper = new ObjectMapper() //with ScalaObjectMapper
+    objectMapper.registerModule(DefaultScalaModule)
+    objectMapper
+  }
 }
