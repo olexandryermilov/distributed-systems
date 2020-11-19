@@ -12,11 +12,11 @@ import scala.beans.BeanProperty
 class AppController() {
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestParam(value = "log", required = true) log: String): Unit = {
-    val resp1 = Http.apply("http://localhost:9081/append").copy(
+    val resp1 = Http.apply("http://docker.for.mac.localhost:9081/append").copy(
       method = "POST",
       params = Seq("log" -> log)
     ).execute()
-    val resp2 = Http.apply("http://localhost:9082/append").copy(
+    val resp2 = Http.apply("http://docker.for.mac.localhost:9082/append").copy(
       method = "POST",
       params = Seq("log" -> log)
     ).execute()
@@ -26,7 +26,7 @@ class AppController() {
   @ResponseBody def readAll(): AllLogs = {
     val mapper = new ObjectMapper()
     mapper.registerModule(DefaultScalaModule)
-    val resp = Http.apply("http://localhost:9081/messages").copy(
+    val resp = Http.apply("http://docker.for.mac.localhost:9081/messages").copy(
       method = "GET",
     ).execute[AllLogs](mapper.readValue(_, classOf[AllLogs])).body
 

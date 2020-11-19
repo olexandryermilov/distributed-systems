@@ -1,0 +1,23 @@
+version: '3.2'
+services:
+  master:
+    build: ./
+    ports:
+      - 9080:9080
+    environment:
+      - MODE=MASTER
+      - PORT=9080
+  secondary1:
+    build: ./
+    ports:
+      - 9081:9081
+    environment:
+      - MODE=SECONDARY
+      - PORT=9081
+  secondary2:
+    build: ./
+    ports:
+      - 9082:9082
+    environment:
+      - MODE=SECONDARY
+      - PORT=9082
