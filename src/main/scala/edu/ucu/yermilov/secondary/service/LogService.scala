@@ -11,7 +11,7 @@ class LogService {
   def append(log: Log): Unit = {
     Thread.sleep(Random.nextInt(500))
     allLogs = allLogs ++ Seq(log)
-    println(allLogs)
+    println(allLogs.toSeq.mkString(", "))
   }
 
   def getAllLogs(): AllLogs = AllLogs(allLogs)

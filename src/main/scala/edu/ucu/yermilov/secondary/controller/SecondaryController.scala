@@ -11,7 +11,7 @@ import scala.beans.BeanProperty
 class AppController(logService: LogService) {
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody log: Log): HttpStatus = {
-    println(s"Got message $log at secondary")
+    println(s"SECONDARY: Got message $log at secondary")
     logService.append(log)
     HttpStatus.OK
   }
@@ -19,7 +19,7 @@ class AppController(logService: LogService) {
   @RequestMapping(value = Array("/messages"), method = Array(RequestMethod.GET))
   @ResponseBody def readAll(): AllLogs = {
     val result = logService.getAllLogs()
-    println(s"Got request to return all logs at secondary, returning ${result.toString}")
+    println(s"SECONDARY: Got request to return all logs at secondary, returning ${result.toString}")
     result
   }
 }
