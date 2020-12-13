@@ -1,6 +1,7 @@
 package edu.ucu.yermilov.master.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.{RequestBody, RequestMapping, RequestMethod, ResponseBody}
@@ -16,6 +17,7 @@ class MasterController(objectMapper: ObjectMapper) {
   private val url = "http://docker.for.mac.localhost:"
   //private val url = "http://localhost:"
   private val ports = Seq(9081, 9082)
+  private val logger = LoggerFactory.getLogger(classOf[MasterController])
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
@@ -26,16 +28,16 @@ class MasterController(objectMapper: ObjectMapper) {
         Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(Log(request.log))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
       }.onComplete {
         case Success(value) =>
-          println(s"MASTER: Response from $port is $value")
+          logger.info(s"MASTER: Response from $port is $value")
           result = result && value == HttpStatus.OK
           acks += 1
-        case Failure(exception) => println(exception)
+        case Failure(exception) => logger.error(exception.getMessage, exception)
       }
     }
     while (acks < request.writeConcern) {
       print("")
     }
-    println("MASTER: Returning result")
+    logger.info("MASTER: Returning result")
     if (result)
       HttpStatus.OK
     else
@@ -47,11 +49,11 @@ class MasterController(objectMapper: ObjectMapper) {
     val resp1 = Http.apply(s"${url}9081/messages").copy(
       method = "GET",
     ).execute[AllLogs](objectMapper.readValue(_, classOf[AllLogs])).body
-    println(s"MASTER: Response from 9081 is ${resp1.toString}")
+    logger.info(s"MASTER: Response from 9081 is ${resp1.toString}")
     val resp2 = Http.apply(s"${url}9082/messages").copy(
       method = "GET",
     ).execute[AllLogs](objectMapper.readValue(_, classOf[AllLogs])).body
-    println(s"Response from 9082 is ${resp2.toString}")
+    logger.info(s"Response from 9082 is ${resp2.toString}")
     if (resp1.logs.deep == resp2.logs.deep) resp1 else throw new RuntimeException("Answers from secondaries are not equal")
   }
 }
