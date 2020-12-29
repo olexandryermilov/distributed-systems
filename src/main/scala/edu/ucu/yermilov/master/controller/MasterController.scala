@@ -1,5 +1,7 @@
 package edu.ucu.yermilov.master.controller
 
+import java.util.concurrent.CountDownLatch
+
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -14,15 +16,15 @@ import scala.util.{Failure, Success}
 @Controller
 class MasterController(objectMapper: ObjectMapper) {
   implicit val executionContext = ExecutionContext.global
-  private val url = "http://docker.for.mac.localhost:"
-  //private val url = "http://localhost:"
+  //private val url = "http://docker.for.mac.localhost:"
+  private val url = "http://localhost:"
   private val ports = Seq(9081, 9082)
   private val logger = LoggerFactory.getLogger(classOf[MasterController])
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
     var result = true
-    var acks = 1
+    val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
     for (port <- ports) {
       val responses = Future {
         Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(Log(request.log))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
@@ -30,13 +32,11 @@ class MasterController(objectMapper: ObjectMapper) {
         case Success(value) =>
           logger.info(s"MASTER: Response from $port is $value")
           result = result && value == HttpStatus.OK
-          acks += 1
+          acks.countDown()
         case Failure(exception) => logger.error(exception.getMessage, exception)
       }
     }
-    while (acks < request.writeConcern) {
-      print("")
-    }
+    acks.await()
     logger.info("MASTER: Returning result")
     if (result)
       HttpStatus.OK
