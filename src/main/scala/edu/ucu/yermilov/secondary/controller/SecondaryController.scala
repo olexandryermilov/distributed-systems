@@ -14,9 +14,9 @@ class AppController(logService: LogService) {
   private val logger = LoggerFactory.getLogger(classOf[AppController])
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
-  @ResponseBody def append(@RequestBody log: Log): HttpStatus = {
-    logger.info(s"SECONDARY: Got message $log at secondary")
-    logService.append(log)
+  @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
+    logger.info(s"SECONDARY: Got message $request at secondary")
+    logService.append(request.log, request.messageId)
     HttpStatus.OK
   }
 
@@ -26,6 +26,11 @@ class AppController(logService: LogService) {
     logger.info(s"SECONDARY: Got request to return all logs at secondary, returning ${result.toString}")
     result
   }
+
+  @RequestMapping(value = Array("/health"), method = Array(RequestMethod.GET))
+  @ResponseBody def isAlive(): HttpStatus = {
+    HttpStatus.OK
+  }
 }
 
 case class AllLogs(@BeanProperty logs: Array[Log]) {
@@ -33,3 +38,5 @@ case class AllLogs(@BeanProperty logs: Array[Log]) {
 }
 
 case class Log(@BeanProperty log: String)
+
+case class AppendRequest(log: Log, messageId: String)

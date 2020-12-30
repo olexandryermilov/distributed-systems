@@ -1,5 +1,6 @@
 package edu.ucu.yermilov.master.controller
 
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -10,8 +11,9 @@ import org.springframework.web.bind.annotation.{RequestBody, RequestMapping, Req
 import scalaj.http.Http
 
 import scala.beans.BeanProperty
+import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 @Controller
 class MasterController(objectMapper: ObjectMapper) {
@@ -20,11 +22,14 @@ class MasterController(objectMapper: ObjectMapper) {
   private val url = "http://localhost:"
   private val ports = Seq(9081, 9082)
   private val logger = LoggerFactory.getLogger(classOf[MasterController])
+  private val messages: mutable.Map[String, Log] = mutable.Map.empty
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
     var result = true
     val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
+    val messageId = UUID.randomUUID().toString
+    messages += messageId -> Log(request.log)
     for (port <- ports) {
       val responses = Future {
         Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(Log(request.log))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
@@ -65,3 +70,10 @@ case class AllLogs(@BeanProperty logs: Array[Log]) {
 case class Log(@BeanProperty log: String)
 
 case class AppendRequest(@BeanProperty log: String, @BeanProperty writeConcern: Int)
+
+object Helpers {
+  def retry[U](f: => U): U = Try(f) match {
+    case Failure(_) => retry(f)
+    case Success(value) => value
+  }
+}
