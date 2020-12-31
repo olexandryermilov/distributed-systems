@@ -14,6 +14,7 @@ import scala.beans.BeanProperty
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+import edu.ucu.yermilov.secondary.controller.{AppendRequest => SecondaryAppendRequest, Log => SecondaryLog}
 
 @Controller
 class MasterController(objectMapper: ObjectMapper) {
@@ -22,31 +23,48 @@ class MasterController(objectMapper: ObjectMapper) {
   private val url = "http://localhost:"
   private val ports = Seq(9081, 9082)
   private val logger = LoggerFactory.getLogger(classOf[MasterController])
-  private val messages: mutable.Map[String, Log] = mutable.Map.empty
+  private val messages: mutable.Map[String, SecondaryLog] = mutable.Map.empty
+  private var time: Int = 0
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
-    var result = true
     val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
+    time += 1
     val messageId = UUID.randomUUID().toString
-    messages += messageId -> Log(request.log)
+    val logToAppend = SecondaryLog(request.log, time)
+    messages += messageId -> logToAppend
     for (port <- ports) {
-      val responses = Future {
-        Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(Log(request.log))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
-      }.onComplete {
-        case Success(value) =>
-          logger.info(s"MASTER: Response from $port is $value")
-          result = result && value == HttpStatus.OK
-          acks.countDown()
-        case Failure(exception) => logger.error(exception.getMessage, exception)
-      }
+      callWithRetry(logToAppend, messageId, port, acks)
     }
     acks.await()
     logger.info("MASTER: Returning result")
-    if (result)
-      HttpStatus.OK
-    else
-      HttpStatus.INTERNAL_SERVER_ERROR
+    HttpStatus.OK
+  }
+
+  private def callWithRetry(logToAppend: SecondaryLog, messageId: String, port: Int, acks: CountDownLatch): Unit = Future {
+    Try {
+      Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(SecondaryAppendRequest(logToAppend, messageId))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
+    }.get
+  }.onComplete {
+    case Success(value) =>
+      logger.info(s"MASTER: Response from $port is $value")
+      if (value == HttpStatus.OK)
+        acks.countDown()
+      else callWithRetry(logToAppend, messageId, port, acks)
+    case Failure(exception) =>
+      logger.error(exception.getMessage, exception)
+      var heartBeatResponse = sendHeartbeat(port)
+      var heartBeatRetries = 1
+      logger.info(s"Heartbeat returned $heartBeatResponse")
+      var isInstanceAlive = heartBeatResponse == HttpStatus.OK
+      while (!isInstanceAlive) {
+        heartBeatResponse = sendHeartbeat(port)
+        logger.info(s"Heartbeat returned $heartBeatResponse")
+        isInstanceAlive = heartBeatResponse == HttpStatus.OK
+        Thread.sleep(heartBeatRetries / 2 * 200)
+        heartBeatRetries += 1
+      }
+      callWithRetry(logToAppend, messageId, port, acks)
   }
 
   @RequestMapping(value = Array("/readAll"), method = Array(RequestMethod.GET))
@@ -61,13 +79,19 @@ class MasterController(objectMapper: ObjectMapper) {
     logger.info(s"Response from 9082 is ${resp2.toString}")
     if (resp1.logs.deep == resp2.logs.deep) resp1 else throw new RuntimeException("Answers from secondaries are not equal")
   }
+
+  private def sendHeartbeat(port: Int): HttpStatus = Try {
+    Http.apply(s"$url$port/health")
+      .copy(method = "GET")
+      .execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
+  }.getOrElse(HttpStatus.SERVICE_UNAVAILABLE)
 }
 
 case class AllLogs(@BeanProperty logs: Array[Log]) {
   override def toString: String = s"[${logs.toSeq.mkString(", ")}]"
 }
 
-case class Log(@BeanProperty log: String)
+case class Log(@BeanProperty log: String, @BeanProperty time: Int)
 
 case class AppendRequest(@BeanProperty log: String, @BeanProperty writeConcern: Int)
 

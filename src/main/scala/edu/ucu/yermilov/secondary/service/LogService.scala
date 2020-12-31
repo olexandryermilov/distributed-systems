@@ -14,10 +14,23 @@ class LogService {
 
   def append(log: Log, messageId: String): Unit = {
     Thread.sleep(Random.nextInt(500))
-    if(!allLogs.contains(messageId))
-      allLogs += Seq(log)
+    if (!allLogs.contains(messageId))
+      allLogs += messageId -> log
     logger.info(allLogs.toSeq.mkString(", "))
   }
 
-  def getAllLogs(): AllLogs = AllLogs(allLogs.values.toArray)
+  def getAllLogs(): AllLogs = {
+    val logs = allLogs.values.toArray.sortBy(_.time)
+    var lastLogToShow = 0
+    var i = 1
+    var consecutive = true
+    while (i < logs.length && consecutive) {
+      if (logs(i).time != logs(i - 1).time + 1) {
+        consecutive = false
+        lastLogToShow = i - 1
+      }
+      i += 1
+    }
+    AllLogs(logs.take(lastLogToShow + 1))
+  }
 }

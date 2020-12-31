@@ -37,6 +37,6 @@ case class AllLogs(@BeanProperty logs: Array[Log]) {
   override def toString: String = s"[${logs.toSeq.mkString(", ")}]"
 }
 
-case class Log(@BeanProperty log: String)
+case class Log(@BeanProperty log: String, @BeanProperty time: Int)
 
 case class AppendRequest(log: Log, messageId: String)
