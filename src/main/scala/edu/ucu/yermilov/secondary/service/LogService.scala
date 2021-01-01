@@ -22,15 +22,20 @@ class LogService {
   def getAllLogs(): AllLogs = {
     val logs = allLogs.values.toArray.sortBy(_.time)
     var lastLogToShow = 0
-    var i = 1
+    var i = 0
     var consecutive = true
     while (i < logs.length && consecutive) {
-      if (logs(i).time != logs(i - 1).time + 1) {
+      logger.info(s"I = $i, time = ${logs(i).time}, lastLogToShow = $lastLogToShow")
+      if (logs(i).time != lastLogToShow + 1) {
         consecutive = false
-        lastLogToShow = i - 1
+        lastLogToShow = i
+      } else {
+        lastLogToShow += 1
       }
       i += 1
     }
-    AllLogs(logs.take(lastLogToShow + 1))
+    logger.info(s"Is consecutive: $consecutive, lastLogToShow = $lastLogToShow, logs = $allLogs")
+    if (consecutive) AllLogs(logs)
+    else AllLogs(logs.take(lastLogToShow))
   }
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.{RequestBody, RequestMapping, RequestMethod, ResponseBody}
 
 import scala.beans.BeanProperty
+import scala.util.Random
 
 @Controller
 class AppController(logService: LogService) {
@@ -16,8 +17,17 @@ class AppController(logService: LogService) {
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
     logger.info(s"SECONDARY: Got message $request at secondary")
-    logService.append(request.log, request.messageId)
-    HttpStatus.OK
+    val shouldFail = Random.nextInt(10)
+    if (shouldFail < 3)
+      HttpStatus.INTERNAL_SERVER_ERROR
+    else {
+      logService.append(request.log, request.messageId)
+      if (shouldFail < 8)
+        HttpStatus.OK
+      else
+        HttpStatus.INTERNAL_SERVER_ERROR
+    }
+
   }
 
   @RequestMapping(value = Array("/messages"), method = Array(RequestMethod.GET))
