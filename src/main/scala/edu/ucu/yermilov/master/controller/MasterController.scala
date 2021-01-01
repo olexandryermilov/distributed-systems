@@ -28,17 +28,28 @@ class MasterController(objectMapper: ObjectMapper) {
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
   @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
-    val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
-    time += 1
-    val messageId = UUID.randomUUID().toString
-    val logToAppend = SecondaryLog(request.log, time)
-    messages += messageId -> logToAppend
-    for (port <- ports) {
-      callWithRetry(logToAppend, messageId, port, acks)
+    val availableNodes = {
+      for {
+        port <- ports
+        healthStatus = sendHeartbeat(port)
+      } yield {
+        if (healthStatus == HttpStatus.OK) 1 else 0
+      }
+    }.sum
+    if (availableNodes >= request.writeConcern - 1) {
+      val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
+      time += 1
+      val messageId = UUID.randomUUID().toString
+      val logToAppend = SecondaryLog(request.log, time)
+      messages += messageId -> logToAppend
+      for (port <- ports) {
+        callWithRetry(logToAppend, messageId, port, acks)
+      }
+      acks.await()
+      logger.info("MASTER: Returning result")
+      HttpStatus.OK
     }
-    acks.await()
-    logger.info("MASTER: Returning result")
-    HttpStatus.OK
+    else HttpStatus.SERVICE_UNAVAILABLE
   }
 
   private def callWithRetry(logToAppend: SecondaryLog, messageId: String, port: Int, acks: CountDownLatch): Unit = Future {
