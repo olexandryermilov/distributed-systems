@@ -43,7 +43,9 @@ class MasterController(objectMapper: ObjectMapper) {
 
   private def callWithRetry(logToAppend: SecondaryLog, messageId: String, port: Int, acks: CountDownLatch): Unit = Future {
     Try {
-      Http.apply(s"$url$port/append").header("content-type", "application/json").postData(objectMapper.writeValueAsString(SecondaryAppendRequest(logToAppend, messageId))).execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
+      Http.apply(s"$url$port/append").header("content-type", "application/json")
+        .postData(objectMapper.writeValueAsString(SecondaryAppendRequest(logToAppend, messageId)))
+        .execute[HttpStatus](objectMapper.readValue(_, classOf[HttpStatus])).body
     }.get
   }.onComplete {
     case Success(value) =>
@@ -77,8 +79,20 @@ class MasterController(objectMapper: ObjectMapper) {
       method = "GET",
     ).execute[AllLogs](objectMapper.readValue(_, classOf[AllLogs])).body
     logger.info(s"Response from 9082 is ${resp2.toString}")
-    if (resp1.logs.deep == resp2.logs.deep) resp1 else throw new RuntimeException("Answers from secondaries are not equal")
+    if (resp1.logs.deep == resp2.logs.deep) resp1
+    else throw new RuntimeException("Answers from secondaries are not equal")
   }
+
+  @RequestMapping(value = Array("/health"), method = Array(RequestMethod.GET))
+  @ResponseBody def health(): String =
+    objectMapper.writeValueAsString(
+      for {
+        port <- ports
+        healthStatus = sendHeartbeat(port)
+      } yield {
+        s"Instance on $port has status $healthStatus"
+      }
+    )
 
   private def sendHeartbeat(port: Int): HttpStatus = Try {
     Http.apply(s"$url$port/health")
@@ -94,10 +108,3 @@ case class AllLogs(@BeanProperty logs: Array[Log]) {
 case class Log(@BeanProperty log: String, @BeanProperty time: Int)
 
 case class AppendRequest(@BeanProperty log: String, @BeanProperty writeConcern: Int)
-
-object Helpers {
-  def retry[U](f: => U): U = Try(f) match {
-    case Failure(_) => retry(f)
-    case Success(value) => value
-  }
-}
