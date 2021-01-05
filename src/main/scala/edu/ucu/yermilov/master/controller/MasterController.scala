@@ -36,7 +36,7 @@ class MasterController(objectMapper: ObjectMapper) {
         if (healthStatus == HttpStatus.OK) 1 else 0
       }
     }.sum
-    if (availableNodes >= request.writeConcern - 1) {
+    if (availableNodes > 0) {
       val acks: CountDownLatch = new CountDownLatch(request.writeConcern - 1)
       time += 1
       val messageId = UUID.randomUUID().toString
@@ -74,25 +74,15 @@ class MasterController(objectMapper: ObjectMapper) {
         heartBeatResponse = sendHeartbeat(port)
         logger.info(s"Heartbeat returned $heartBeatResponse")
         isInstanceAlive = heartBeatResponse == HttpStatus.OK
-        Thread.sleep(heartBeatRetries / 2 * 200)
+        Thread.sleep(200)
         heartBeatRetries += 1
       }
       callWithRetry(logToAppend, messageId, port, acks)
   }
 
   @RequestMapping(value = Array("/readAll"), method = Array(RequestMethod.GET))
-  @ResponseBody def readAll(): AllLogs = {
-    val resp1 = Http.apply(s"${url}9081/messages").copy(
-      method = "GET",
-    ).execute[AllLogs](objectMapper.readValue(_, classOf[AllLogs])).body
-    logger.info(s"MASTER: Response from 9081 is ${resp1.toString}")
-    val resp2 = Http.apply(s"${url}9082/messages").copy(
-      method = "GET",
-    ).execute[AllLogs](objectMapper.readValue(_, classOf[AllLogs])).body
-    logger.info(s"Response from 9082 is ${resp2.toString}")
-    if (resp1.logs.deep == resp2.logs.deep) resp1
-    else throw new RuntimeException("Answers from secondaries are not equal")
-  }
+  @ResponseBody def readAll(): AllLogs =
+    AllLogs(messages.values.toArray.map(x => Log(x.log, x.time)))
 
   @RequestMapping(value = Array("/health"), method = Array(RequestMethod.GET))
   @ResponseBody def health(): String =
