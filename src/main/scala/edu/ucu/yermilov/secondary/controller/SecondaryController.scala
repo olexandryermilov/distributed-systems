@@ -7,6 +7,7 @@ import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.{RequestBody, RequestMapping, RequestMethod, ResponseBody}
 
 import scala.beans.BeanProperty
+import scala.util.Random
 
 @Controller
 class AppController(logService: LogService) {
@@ -14,10 +15,19 @@ class AppController(logService: LogService) {
   private val logger = LoggerFactory.getLogger(classOf[AppController])
 
   @RequestMapping(value = Array("/append"), method = Array(RequestMethod.POST))
-  @ResponseBody def append(@RequestBody log: Log): HttpStatus = {
-    logger.info(s"SECONDARY: Got message $log at secondary")
-    logService.append(log)
-    HttpStatus.OK
+  @ResponseBody def append(@RequestBody request: AppendRequest): HttpStatus = {
+    logger.info(s"SECONDARY: Got message $request at secondary")
+    val shouldFail = Random.nextInt(10)
+    if (shouldFail < 3)
+      HttpStatus.INTERNAL_SERVER_ERROR
+    else {
+      logService.append(request.log, request.messageId)
+      if (shouldFail < 8)
+        HttpStatus.OK
+      else
+        HttpStatus.INTERNAL_SERVER_ERROR
+    }
+
   }
 
   @RequestMapping(value = Array("/messages"), method = Array(RequestMethod.GET))
@@ -26,10 +36,17 @@ class AppController(logService: LogService) {
     logger.info(s"SECONDARY: Got request to return all logs at secondary, returning ${result.toString}")
     result
   }
+
+  @RequestMapping(value = Array("/health"), method = Array(RequestMethod.GET))
+  @ResponseBody def isAlive(): HttpStatus = {
+    HttpStatus.OK
+  }
 }
 
 case class AllLogs(@BeanProperty logs: Array[Log]) {
   override def toString: String = s"[${logs.toSeq.mkString(", ")}]"
 }
 
-case class Log(@BeanProperty log: String)
+case class Log(@BeanProperty log: String, @BeanProperty time: Int)
+
+case class AppendRequest(log: Log, messageId: String)
